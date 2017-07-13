@@ -13,7 +13,7 @@ func TestCalculateSignature(t *testing.T) {
 	data["key11"] = nil
 	data["key111"] = 1.2
 
-	correct := "131a744cdde8eaf40ee3bfa9c821f748fb29a68c00b18adc41964e3748bf010b"
+	correct := "d8aa8cf7e9233345745902cc0278d587c1750c2faa5fe09ac99ff5fd161049e1"
 	sign := CalculateSignature(privateKey, data, 3)
 	if sign != correct {
 		t.Error("Expected: ", correct, " got ", sign)

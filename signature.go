@@ -53,7 +53,7 @@ func prepareParameters(data map[string]interface{}, baseString string) string {
 
 	}
 
-	return baseString + base
+	return base + baseString
 }
 
 func CalculateSignature(privateKey string, data map[string]interface{}, version int) string {
