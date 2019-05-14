@@ -28,9 +28,7 @@ func Test_widget_GetController(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			w := &widget{
-				config: Config{
-					APIType: tt.apiType,
-				},
+				cfg: NewConfig(tt.apiType, "", "", 0),
 			}
 			if got := w.GetController(); got != tt.want {
 				t.Errorf("When API Type is '%v': widget.GetController() = '%v', want '%v'", tt.apiType, got, tt.want)
@@ -47,7 +45,7 @@ func Test_widget_GetController(t *testing.T) {
 			}
 		}()
 
-		w := &widget{config: Config{APIType: 8}}
+		w := &widget{cfg: config{apiType: 8}}
 		w.GetController()
 	})
 }
@@ -56,13 +54,13 @@ func Test_widget_BuildQuery(t *testing.T) {
 	publicKey := md5.Sum([]byte("public"))
 	privateKey := md5.Sum([]byte("private"))
 
-	config := Config{
-		APIType:    APIVirtualCurrency,
-		PublicKey:  string(publicKey[:]),
-		PrivateKey: string(privateKey[:]),
+	c := config{
+		apiType:    APIVirtualCurrency,
+		publicKey:  string(publicKey[:]),
+		privateKey: string(privateKey[:]),
 	}
 
-	app := New(config)
+	app := New(c)
 
 	tests := []struct {
 		name string
@@ -70,7 +68,7 @@ func Test_widget_BuildQuery(t *testing.T) {
 		want string
 	}{
 		{
-			w: app.NewWidget("pw", "user1", []Product{}),
+			w: app.NewWidget("pw", "user1", []product{}),
 		},
 	}
 	for _, tt := range tests {

@@ -8,18 +8,18 @@ import (
 type WidgetAttributes map[string]string
 
 type widget struct {
-	config Config
+	cfg config
 
 	Code     string
 	UserID   string
-	Products []Product
+	Products []product
 
 	//
 	widgetAttributes WidgetAttributes
 }
 
-func (w *widget) SetConfig(config Config) *widget {
-	w.config = config
+func (w *widget) SetConfig(config config) *widget {
+	w.cfg = config
 	return w
 }
 
@@ -34,6 +34,10 @@ func (w *widget) SetWidth(width int) *widget {
 func (w *widget) SetAttribute(key, value string) *widget {
 	w.widgetAttributes[key] = value
 	return w
+}
+
+func (w *widget) SetProducts(products []product) {
+	w.Products = products
 }
 
 func (w *widget) GetURL() string {
@@ -57,7 +61,7 @@ func (w *widget) GetHTML() string {
 }
 
 func (w *widget) GetController() string {
-	switch w.config.APIType {
+	switch w.cfg.GetAPIType() {
 	case APIVirtualCurrency:
 		return "ps"
 
@@ -68,12 +72,41 @@ func (w *widget) GetController() string {
 		return "cart"
 
 	default:
-		panic(fmt.Sprintf("Invalid API Type: %v", w.config.APIType))
+		return ""
 	}
 }
 
 func (w *widget) BuildQuery() string {
-	return ""
+	params := map[string]string{
+		"key":          w.cfg.GetPublicKey(),
+		"uid":          w.UserID,
+		"widget":       w.Code,
+		"sign_version": strconv.Itoa(w.cfg.GetSignatureVersion()),
+	}
+
+	switch w.cfg.GetAPIType() {
+	case APIDigitalGoods:
+		params = mergeMaps(
+			params,
+			prepareDigitalGoodsParameters(w.Products),
+		)
+		break
+
+	case APICart:
+		params = mergeMaps(
+			params,
+			prepareCartParameters(w.Products),
+		)
+		break
+	}
+
+	params["sign"] = CalculateSign(
+		w.cfg.GetPrivateKey(),
+		params,
+		w.cfg.GetSignatureVersion(),
+	)
+
+	return mapToQueryString(params)
 }
 
 func defaultWidgetAttributes() WidgetAttributes {
@@ -82,4 +115,19 @@ func defaultWidgetAttributes() WidgetAttributes {
 		"height":      "600",
 		"frameborder": "0",
 	}
+}
+
+func prepareDigitalGoodsParameters(products []product) map[string]string {
+	if len(products) > 0 {
+		// take only the first product
+		product := products[0]
+
+		return product.GetDataMap()
+	}
+
+	return map[string]string{}
+}
+
+func prepareCartParameters(products []product) map[string]string {
+	return map[string]string{}
 }

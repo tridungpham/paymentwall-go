@@ -1,0 +1,960 @@
+diff --git a/README.md b/README.md
+new file mode 100644
+index 0000000..7adc3a5
+--- /dev/null
++++ b/README.md
+@@ -0,0 +1,7 @@
++```go
++package main
++
++func main() {
++
++}
++```
+\ No newline at end of file
+diff --git a/base.go b/base.go
+index 0add2ad..ce19984 100644
+--- a/base.go
++++ b/base.go
+@@ -1,18 +1,24 @@
+ package paymentwall
+ 
+ type app struct {
+-	config Config
++	cfg config
+ }
+ 
+-func New(config Config) *app {
++func New(config config) *app {
+ 	return &app{
+-		config: config,
++		cfg: config,
+ 	}
+ }
+ 
+-func (a *app) NewWidget(code string, userID string, products []Product) *widget {
++func (a *app) NewWidget(code string, userID string, products []product) *widget {
++
++	//validate
++	if a.cfg.GetAPIType() == APIDigitalGoods && len(products) > 1 {
++		panic("Digital Goods API does not support more than 1 product")
++	}
++
+ 	return &widget{
+-		config:           a.config,
++		cfg:              a.cfg,
+ 		widgetAttributes: defaultWidgetAttributes(),
+ 
+ 		Code:     code,
+diff --git a/config.go b/config.go
+index f119e68..dd0be1e 100644
+--- a/config.go
++++ b/config.go
+@@ -1,7 +1,51 @@
+ package paymentwall
+ 
+-type Config struct {
+-	APIType    int
+-	PublicKey  string
+-	PrivateKey string
++import "fmt"
++
++type config struct {
++	apiType    int
++	publicKey  string
++	privateKey string
++
++	signVersion int
++}
++
++func NewConfig(
++	apiType int,
++	publicKey string,
++	privateKey string,
++	signVersion int,
++) *config {
++	if isValidAPIType(apiType) == false {
++		panic(fmt.Errorf("Invalid API Type provided: %s", apiType))
++	}
++
++	if !signatureVersionSupported(signVersion) {
++		panic(fmt.Errorf("Signature version %d is not supported", signVersion))
++	}
++
++	cfg := &config{
++		apiType:     apiType,
++		publicKey:   publicKey,
++		privateKey:  privateKey,
++		signVersion: signVersion,
++	}
++
++	return cfg
++}
++
++func (c config) GetAPIType() int {
++	return c.apiType
++}
++
++func (c config) GetPublicKey() string {
++	return c.publicKey
++}
++
++func (c config) GetPrivateKey() string {
++	return c.privateKey
++}
++
++func (c config) GetSignatureVersion() int {
++	return c.signVersion
+ }
+diff --git a/constant.go b/constant.go
+index 7dd9eea..90669aa 100644
+--- a/constant.go
++++ b/constant.go
+@@ -10,3 +10,27 @@ const (
+ 	APIDigitalGoods    = 2
+ 	APICart            = 3
+ )
++
++var availableTypes = []int{
++	APIVirtualCurrency,
++	APIDigitalGoods,
++	APICart,
++}
++
++func isValidAPIType(t int) bool {
++	for _, v := range availableTypes {
++		if t == v {
++			return true
++		}
++	}
++
++	return false
++}
++
++func signatureVersionSupported(v int) bool {
++	if v < 1 || v > 3 {
++		return false
++	}
++
++	return true
++}
+diff --git a/go.mod b/go.mod
+index 64497b7..c791d79 100644
+--- a/go.mod
++++ b/go.mod
+@@ -1,3 +1,5 @@
+ module github.com/paymentwall/paymentwall-go
+ 
+ go 1.12
++
++require github.com/stretchr/testify v1.3.0
+diff --git a/go.sum b/go.sum
+new file mode 100644
+index 0000000..380091e
+--- /dev/null
++++ b/go.sum
+@@ -0,0 +1,8 @@
++github.com/davecgh/go-spew v1.1.0 h1:ZDRjVQ15GmhC3fiQ8ni8+OwkZQO4DARzQgrnXU1Liz8=
++github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
++github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
++github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
++github.com/stretchr/objx v0.1.0 h1:4G4v2dO3VZwixGIRoQ5Lfboy6nUhCyYzaqnIAPPhYs4=
++github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
++github.com/stretchr/testify v1.3.0 h1:TivCn/peBQ7UY8ooIcPgZFpTNSz0Q2U6UrFlUfqbe0Q=
++github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UVUgZn+9EI=
+diff --git a/helper.go b/helper.go
+new file mode 100644
+index 0000000..673e901
+--- /dev/null
++++ b/helper.go
+@@ -0,0 +1,39 @@
++package paymentwall
++
++import (
++	"net/url"
++	"sort"
++)
++
++func SortParameters(params map[string]string) map[string]string {
++	var keys []string
++	output := map[string]string{}
++
++	for k := range params {
++		keys = append(keys, k)
++	}
++
++	sort.Strings(keys)
++	for _, k := range keys {
++		output[k] = params[k]
++	}
++
++	return output
++}
++
++func mergeMaps(dest, src map[string]string) map[string]string {
++	for k := range src {
++		dest[k] = src[k]
++	}
++
++	return dest
++}
++
++func mapToQueryString(m map[string]string) string {
++	values := url.Values{}
++	for k, v := range m {
++		values.Add(k, v)
++	}
++
++	return values.Encode()
++}
+diff --git a/helper_test.go b/helper_test.go
+new file mode 100644
+index 0000000..385cab9
+--- /dev/null
++++ b/helper_test.go
+@@ -0,0 +1,55 @@
++package paymentwall_test
++
++import (
++	"reflect"
++	"testing"
++
++	paymentwall "github.com/paymentwall/paymentwall-go"
++)
++
++func TestSortParameters(t *testing.T) {
++	tests := []struct {
++		name string
++		args map[string]string
++		want map[string]string
++	}{
++		{
++			name: "first case",
++			args: map[string]string{
++				"hello":   "world",
++				"api":     "payment",
++				"invoice": "api",
++			},
++			want: map[string]string{
++				"api":     "payment",
++				"hello":   "world",
++				"invoice": "api",
++			},
++		},
++
++		{
++			name: "2nd test case",
++			args: map[string]string{
++				"a":     "quick",
++				"brown": "fox",
++				"jumps": "over",
++				"the":   "lazy",
++				"dog":   ".",
++			},
++			want: map[string]string{
++				"a":     "quick",
++				"brown": "fox",
++				"dog":   ".",
++				"jumps": "over",
++				"the":   "lazy",
++			},
++		},
++	}
++	for _, tt := range tests {
++		t.Run(tt.name, func(t *testing.T) {
++			if got := paymentwall.SortParameters(tt.args); !reflect.DeepEqual(got, tt.want) {
++				t.Errorf("SortParameters() = %v, want %v", got, tt.want)
++			}
++		})
++	}
++}
+diff --git a/period.go b/period.go
+new file mode 100644
+index 0000000..36b9c38
+--- /dev/null
++++ b/period.go
+@@ -0,0 +1,31 @@
++package paymentwall
++
++import "fmt"
++
++const (
++	PeriodTypeDay   = "day"
++	PeriodTypeWeek  = "week"
++	PeriodTypeMonth = "month"
++)
++
++type period struct {
++	Type   string
++	Length int
++}
++
++func NewPeriod(periodType string, periodLength int) *period {
++	validatePeriod(periodType, periodLength)
++
++	return &period{
++		Type:   periodType,
++		Length: periodLength,
++	}
++}
++
++func validatePeriod(periodType string, periodLength int) {
++	if periodType != PeriodTypeDay &&
++		periodType != PeriodTypeWeek &&
++		periodType != PeriodTypeMonth {
++		panic(fmt.Errorf("Invalid period type: '%s'", periodType))
++	}
++}
+diff --git a/period_test.go b/period_test.go
+new file mode 100644
+index 0000000..c0fa2a9
+--- /dev/null
++++ b/period_test.go
+@@ -0,0 +1,36 @@
++package paymentwall_test
++
++import (
++	"testing"
++
++	pw "github.com/paymentwall/paymentwall-go"
++	"github.com/stretchr/testify/assert"
++)
++
++func TestNewPeriod(t *testing.T) {
++	t.Run("should panic for invalid period type", func(t *testing.T) {
++		defer func() {
++			r := recover()
++			err, ok := r.(error)
++			if r == nil || !ok {
++				t.Error("Should panic when provide invalid period type")
++			}
++
++			if err.Error() != "Invalid period type: 'invalid-period-type'" {
++				t.Errorf("Invalid panic message: %s", r)
++			}
++		}()
++
++		pw.NewPeriod("invalid-period-type", 30)
++	})
++
++	t.Run("success case", func(t *testing.T) {
++		p := pw.NewPeriod(
++			pw.PeriodTypeDay,
++			30,
++		)
++
++		assert.Equal(t, pw.PeriodTypeDay, p.Type)
++		assert.Equal(t, 30, p.Length)
++	})
++}
+diff --git a/product.go b/product.go
+index d83d5d0..e24aab5 100644
+--- a/product.go
++++ b/product.go
+@@ -1,14 +1,152 @@
+ package paymentwall
+ 
++import (
++	"fmt"
++	"strconv"
++)
++
+ const (
+ 	SubscriptionProduct = "subscription"
+ 	FixedProduct        = "fixed"
+ )
+ 
+-type Product struct {
++type ProductBaseData struct {
+ 	ID       string
+ 	Name     string
+-	Price    float64
++	Amount   float64
+ 	Currency string
+-	Type     string
++}
++
++// Product struct that represent a product in customer system
++type product struct {
++	ProductBaseData
++
++	// subscription or fixed
++	productType string
++
++	// Subscription settings
++	isRecurring bool
++}
++
++func (p *product) GetAmountString() string {
++	return fmt.Sprintf("%0.2f", p.Amount)
++}
++
++func (p *product) GetProductType() string {
++	return p.productType
++}
++
++func (p *product) IsRecurring() bool {
++	return p.isRecurring
++}
++
++func (p product) GetDataMap() map[string]string {
++	return map[string]string{
++		"amount":         p.GetAmountString(),
++		"currencyCode":   p.Currency,
++		"ag_name":        p.Name,
++		"ag_external_id": p.ID,
++		"ag_type":        p.GetProductType(),
++	}
++}
++
++type subscriptionProduct struct {
++	*product
++	*period
++
++	trialProduct *subscriptionProduct
++}
++
++func (sp *subscriptionProduct) GetPeriodType() string {
++	return sp.period.Type
++}
++
++func (sp *subscriptionProduct) GetPeriodLength() int {
++	return sp.period.Length
++}
++
++func (sp *subscriptionProduct) SetTrialProduct(trial *subscriptionProduct) {
++	if trial.HasTrialProduct() {
++		panic("Trial product can not have another trial product")
++	}
++
++	sp.trialProduct = trial
++}
++
++func (sp *subscriptionProduct) HasTrialProduct() bool {
++	return sp.trialProduct != nil
++}
++
++func (sp *subscriptionProduct) GetTrialProduct() *subscriptionProduct {
++	return sp.trialProduct
++}
++
++func (sp *subscriptionProduct) GetDataMap() map[string]string {
++	var base map[string]string
++
++	if sp.HasTrialProduct() {
++		base = sp.trialProduct.GetDataMap()
++
++		base["ag_trial"] = "1"
++		base["ag_post_trial_external_id"] = sp.ID
++		base["ag_post_trial_period_length"] = strconv.Itoa(sp.GetPeriodLength())
++		base["ag_post_trial_period_type"] = sp.GetPeriodType()
++		base["ag_post_trial_name"] = sp.Name
++		base["post_trial_amount"] = sp.GetAmountString()
++		base["post_trial_currencyCode"] = sp.Currency
++	} else {
++		base = sp.product.GetDataMap()
++		base["ag_period_type"] = sp.period.Type
++		base["ag_period_length"] = strconv.Itoa(sp.GetPeriodLength())
++		base["ag_recurring"] = "1"
++	}
++
++	return base
++}
++
++func NewFixedProduct(data ProductBaseData) *product {
++	validateProductBaseData(data)
++
++	return &product{
++		ProductBaseData: data,
++
++		productType: FixedProduct,
++	}
++}
++
++func NewSubscriptionProduct(
++	data ProductBaseData,
++	periodConfig *period,
++) *subscriptionProduct {
++	validateProductBaseData(data)
++
++	product := &subscriptionProduct{
++		product: &product{
++			ProductBaseData: data,
++
++			productType: SubscriptionProduct,
++			isRecurring: true,
++		},
++		period: periodConfig,
++	}
++
++	return product
++}
++
++func validateProductBaseData(data ProductBaseData) {
++	if data.ID == "" {
++		panic(fmt.Errorf("Product ID was not provided"))
++	}
++
++	if data.Name == "" {
++		panic(fmt.Errorf("Product name was not provided"))
++	}
++
++	if data.Amount < 0 {
++		panic(fmt.Errorf("Invalid price amount provided: %s", data.Amount))
++	}
++
++	if data.Currency == "" {
++		panic(fmt.Errorf("Price currency was not provided"))
++	}
+ }
+diff --git a/product_test.go b/product_test.go
+new file mode 100644
+index 0000000..a617047
+--- /dev/null
++++ b/product_test.go
+@@ -0,0 +1,230 @@
++package paymentwall_test
++
++import (
++	"reflect"
++	"testing"
++
++	"github.com/stretchr/testify/assert"
++
++	paymentwall "github.com/paymentwall/paymentwall-go"
++)
++
++func Test_NewFixedProduct(t *testing.T) {
++	productID := "product-id"
++	productName := "acme-product"
++	productSamplePrice := 9.99
++	productCurrency := "USD"
++
++	product := paymentwall.NewFixedProduct(
++		paymentwall.ProductBaseData{
++			ID:       productID,
++			Name:     productName,
++			Amount:   productSamplePrice,
++			Currency: productCurrency,
++		},
++	)
++
++	if product.Name != productName ||
++		product.ID != productID ||
++		product.Amount != productSamplePrice ||
++		product.Currency != productCurrency {
++		t.Error("Base attributes do not equal")
++	}
++
++	if product.GetProductType() != paymentwall.FixedProduct {
++		t.Errorf(
++			"Expect product's type is fixed, got '%s' instead",
++			product.GetProductType(),
++		)
++	}
++
++	if product.IsRecurring() == true {
++		t.Error("Expect product is not recurring type")
++	}
++
++	if product.GetAmountString() != "9.99" {
++		t.Errorf("Expect product amount is 9.99, got '%s' instead",
++			product.GetAmountString(),
++		)
++	}
++}
++
++func Test_FixedProduct_GetDataMap(t *testing.T) {
++	tests := []struct {
++		name   string
++		fields paymentwall.ProductBaseData
++		want   map[string]string
++	}{
++		{
++			name: "Basic case",
++			fields: paymentwall.ProductBaseData{
++				ID:       "sample-id",
++				Name:     "sample-name",
++				Amount:   9.99,
++				Currency: "USD",
++			},
++			want: map[string]string{
++				"amount":         "9.99",
++				"currencyCode":   "USD",
++				"ag_name":        "sample-name",
++				"ag_external_id": "sample-id",
++				"ag_type":        "fixed",
++			},
++		},
++	}
++	for _, tt := range tests {
++		t.Run(tt.name, func(t *testing.T) {
++			p := paymentwall.NewFixedProduct(tt.fields)
++			if got := p.GetDataMap(); !reflect.DeepEqual(
++				paymentwall.SortParameters(got),
++				paymentwall.SortParameters(tt.want),
++			) {
++				t.Errorf("product.GetDataMap() = %v, want %v", got, tt.want)
++			}
++		})
++	}
++}
++
++func Test_NewSubscriptionProduct(t *testing.T) {
++	t.Run("Success case", func(t *testing.T) {
++		a := assert.New(t)
++
++		productID := "product-id"
++		productName := "acme-product"
++		productSamplePrice := 9.99
++		productCurrency := "USD"
++
++		product := paymentwall.NewSubscriptionProduct(
++			paymentwall.ProductBaseData{
++				ID:       productID,
++				Name:     productName,
++				Amount:   productSamplePrice,
++				Currency: productCurrency,
++			},
++
++			paymentwall.NewPeriod(
++				paymentwall.PeriodTypeDay,
++				30,
++			),
++		)
++
++		a.Equal(productID, product.ID)
++		a.Equal(productName, product.Name)
++		a.Equal(productSamplePrice, product.Amount)
++		a.Equal(productCurrency, product.Currency)
++		a.Equal(paymentwall.SubscriptionProduct, product.GetProductType())
++		a.True(product.IsRecurring())
++		a.Equal(paymentwall.PeriodTypeDay, product.GetPeriodType())
++		a.Equal(30, product.GetPeriodLength())
++		a.False(product.HasTrialProduct())
++		a.Nil(product.GetTrialProduct())
++	})
++}
++
++func Test_SubscriptionProduct_GetDataMap(t *testing.T) {
++	t.Run("subscription product without trial product", func(t *testing.T) {
++		a := assert.New(t)
++
++		productID := "product-id"
++		productName := "acme-product"
++		productSamplePrice := 9.99
++		productCurrency := "USD"
++
++		product := paymentwall.NewSubscriptionProduct(
++			paymentwall.ProductBaseData{
++				ID:       productID,
++				Name:     productName,
++				Amount:   productSamplePrice,
++				Currency: productCurrency,
++			},
++
++			paymentwall.NewPeriod(
++				paymentwall.PeriodTypeDay,
++				30,
++			),
++		)
++
++		expected := map[string]string{
++			"amount":           "9.99",
++			"currencyCode":     "USD",
++			"ag_name":          "acme-product",
++			"ag_external_id":   "product-id",
++			"ag_type":          "subscription",
++			"ag_period_length": "30",
++			"ag_period_type":   "day",
++			"ag_recurring":     "1",
++		}
++
++		a.Equal(
++			paymentwall.SortParameters(expected),
++			paymentwall.SortParameters(product.GetDataMap()),
++		)
++	})
++
++	t.Run("subscription product with trial", func(t *testing.T) {
++		a := assert.New(t)
++
++		productID := "product-id"
++		productName := "acme-product"
++		productSamplePrice := 9.99
++		productCurrency := "USD"
++
++		product := paymentwall.NewSubscriptionProduct(
++			paymentwall.ProductBaseData{
++				ID:       productID,
++				Name:     productName,
++				Amount:   productSamplePrice,
++				Currency: productCurrency,
++			},
++
++			paymentwall.NewPeriod(
++				paymentwall.PeriodTypeWeek,
++				2,
++			),
++		)
++
++		trialProductID := "trial-product-id"
++		trialProductName := "acme-trial-product"
++		trialProductPrice := 1.0
++		trialProductCurrency := "VND"
++
++		trialProduct := paymentwall.NewSubscriptionProduct(
++			paymentwall.ProductBaseData{
++				ID:       trialProductID,
++				Name:     trialProductName,
++				Amount:   trialProductPrice,
++				Currency: trialProductCurrency,
++			},
++			paymentwall.NewPeriod(
++				paymentwall.PeriodTypeDay,
++				3,
++			),
++		)
++
++		product.SetTrialProduct(trialProduct)
++
++		expected := map[string]string{
++			"amount":           "1.00",
++			"currencyCode":     trialProductCurrency,
++			"ag_name":          trialProductName,
++			"ag_external_id":   trialProductID,
++			"ag_type":          paymentwall.SubscriptionProduct,
++			"ag_period_length": "3",
++			"ag_period_type":   paymentwall.PeriodTypeDay,
++			"ag_recurring":     "1",
++			"ag_trial":         "1",
++
++			"ag_post_trial_external_id":   productID,
++			"ag_post_trial_name":          productName,
++			"ag_post_trial_period_length": "2",
++			"ag_post_trial_period_type":   paymentwall.PeriodTypeWeek,
++			"post_trial_amount":           "9.99",
++			"post_trial_currencyCode":     "USD",
++		}
++
++		a.Equal(
++			paymentwall.SortParameters(expected),
++			paymentwall.SortParameters(product.GetDataMap()),
++		)
++	})
++}
+diff --git a/sign.go b/sign.go
+new file mode 100644
+index 0000000..7db8a37
+--- /dev/null
++++ b/sign.go
+@@ -0,0 +1,47 @@
++package paymentwall
++
++import (
++	"crypto/md5"
++	"crypto/sha256"
++	"encoding/hex"
++	"fmt"
++	"hash"
++	"strings"
++)
++
++func CalculateSign(
++	key string,
++	params map[string]string,
++	version int) string {
++	hasher := getHasher(version)
++	stringToHash := getStringToHash(key, params)
++
++	hasher.Write([]byte(stringToHash))
++	return hex.EncodeToString(hasher.Sum(nil))
++}
++
++func getHasher(version int) hash.Hash {
++	var hasher hash.Hash
++
++	switch version {
++	case 1, 2:
++		hasher = md5.New()
++		break
++
++	case 3:
++		hasher = sha256.New()
++	}
++
++	return hasher
++}
++
++func getStringToHash(key string, params map[string]string) string {
++	params = SortParameters(params)
++	output := []string{}
++
++	for k, v := range params {
++		output = append(output, fmt.Sprintf("%s=%s", k, v))
++	}
++
++	return strings.Join(output, "&")
++}
+diff --git a/widget.go b/widget.go
+index 9d212db..d459a55 100644
+--- a/widget.go
++++ b/widget.go
+@@ -8,18 +8,18 @@ import (
+ type WidgetAttributes map[string]string
+ 
+ type widget struct {
+-	config Config
++	cfg config
+ 
+ 	Code     string
+ 	UserID   string
+-	Products []Product
++	Products []product
+ 
+ 	//
+ 	widgetAttributes WidgetAttributes
+ }
+ 
+-func (w *widget) SetConfig(config Config) *widget {
+-	w.config = config
++func (w *widget) SetConfig(config config) *widget {
++	w.cfg = config
+ 	return w
+ }
+ 
+@@ -36,6 +36,10 @@ func (w *widget) SetAttribute(key, value string) *widget {
+ 	return w
+ }
+ 
++func (w *widget) SetProducts(products []product) {
++	w.Products = products
++}
++
+ func (w *widget) GetURL() string {
+ 	return fmt.Sprintf(
+ 		"%s/%s?%s",
+@@ -57,7 +61,7 @@ func (w *widget) GetHTML() string {
+ }
+ 
+ func (w *widget) GetController() string {
+-	switch w.config.APIType {
++	switch w.cfg.GetAPIType() {
+ 	case APIVirtualCurrency:
+ 		return "ps"
+ 
+@@ -68,12 +72,41 @@ func (w *widget) GetController() string {
+ 		return "cart"
+ 
+ 	default:
+-		panic(fmt.Sprintf("Invalid API Type: %v", w.config.APIType))
++		return ""
+ 	}
+ }
+ 
+ func (w *widget) BuildQuery() string {
+-	return ""
++	params := map[string]string{
++		"key":          w.cfg.GetPublicKey(),
++		"uid":          w.UserID,
++		"widget":       w.Code,
++		"sign_version": strconv.Itoa(w.cfg.GetSignatureVersion()),
++	}
++
++	switch w.cfg.GetAPIType() {
++	case APIDigitalGoods:
++		params = mergeMaps(
++			params,
++			prepareDigitalGoodsParameters(w.Products),
++		)
++		break
++
++	case APICart:
++		params = mergeMaps(
++			params,
++			prepareCartParameters(w.Products),
++		)
++		break
++	}
++
++	params["sign"] = CalculateSign(
++		w.cfg.GetPrivateKey(),
++		params,
++		w.cfg.GetSignatureVersion(),
++	)
++
++	return mapToQueryString(params)
+ }
+ 
+ func defaultWidgetAttributes() WidgetAttributes {
+@@ -83,3 +116,18 @@ func defaultWidgetAttributes() WidgetAttributes {
+ 		"frameborder": "0",
+ 	}
+ }
++
++func prepareDigitalGoodsParameters(products []product) map[string]string {
++	if len(products) > 0 {
++		// take only the first product
++		product := products[0]
++
++		return product.GetDataMap()
++	}
++
++	return map[string]string{}
++}
++
++func prepareCartParameters(products []product) map[string]string {
++	return map[string]string{}
++}
+diff --git a/widget_test.go b/widget_test.go
+index 9299fd0..731f6d1 100644
+--- a/widget_test.go
++++ b/widget_test.go
+@@ -28,9 +28,7 @@ func Test_widget_GetController(t *testing.T) {
+ 	for _, tt := range tests {
+ 		t.Run(tt.name, func(t *testing.T) {
+ 			w := &widget{
+-				config: Config{
+-					APIType: tt.apiType,
+-				},
++				cfg: NewConfig(tt.apiType, "", "", 0),
+ 			}
+ 			if got := w.GetController(); got != tt.want {
+ 				t.Errorf("When API Type is '%v': widget.GetController() = '%v', want '%v'", tt.apiType, got, tt.want)
+@@ -47,7 +45,7 @@ func Test_widget_GetController(t *testing.T) {
+ 			}
+ 		}()
+ 
+-		w := &widget{config: Config{APIType: 8}}
++		w := &widget{cfg: config{apiType: 8}}
+ 		w.GetController()
+ 	})
+ }
+@@ -56,13 +54,13 @@ func Test_widget_BuildQuery(t *testing.T) {
+ 	publicKey := md5.Sum([]byte("public"))
+ 	privateKey := md5.Sum([]byte("private"))
+ 
+-	config := Config{
+-		APIType:    APIVirtualCurrency,
+-		PublicKey:  string(publicKey[:]),
+-		PrivateKey: string(privateKey[:]),
++	c := config{
++		apiType:    APIVirtualCurrency,
++		publicKey:  string(publicKey[:]),
++		privateKey: string(privateKey[:]),
+ 	}
+ 
+-	app := New(config)
++	app := New(c)
+ 
+ 	tests := []struct {
+ 		name string
+@@ -70,7 +68,7 @@ func Test_widget_BuildQuery(t *testing.T) {
+ 		want string
+ 	}{
+ 		{
+-			w: app.NewWidget("pw", "user1", []Product{}),
++			w: app.NewWidget("pw", "user1", []product{}),
+ 		},
+ 	}
+ 	for _, tt := range tests {
