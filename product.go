@@ -143,7 +143,7 @@ func validateProductBaseData(data ProductBaseData) {
 	}
 
 	if data.Amount < 0 {
-		panic(fmt.Errorf("Invalid price amount provided: %s", data.Amount))
+		panic(fmt.Errorf("Invalid price amount provided: %f", data.Amount))
 	}
 
 	if data.Currency == "" {

@@ -21,7 +21,7 @@ func SortParameters(params map[string]string) map[string]string {
 	return output
 }
 
-func mergeMaps(dest, src map[string]string) map[string]string {
+func MergeMaps(dest, src map[string]string) map[string]string {
 	for k := range src {
 		dest[k] = src[k]
 	}
@@ -29,7 +29,7 @@ func mergeMaps(dest, src map[string]string) map[string]string {
 	return dest
 }
 
-func mapToQueryString(m map[string]string) string {
+func MapToQueryString(m map[string]string) string {
 	values := url.Values{}
 	for k, v := range m {
 		values.Add(k, v)

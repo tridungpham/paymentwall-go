@@ -17,7 +17,7 @@ func NewConfig(
 	signVersion int,
 ) *config {
 	if isValidAPIType(apiType) == false {
-		panic(fmt.Errorf("Invalid API Type provided: %s", apiType))
+		panic(fmt.Errorf("Invalid API Type provided: %d", apiType))
 	}
 
 	if !signatureVersionSupported(signVersion) {

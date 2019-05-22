@@ -4,9 +4,7 @@ import (
 	"crypto/md5"
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
 	"hash"
-	"strings"
 )
 
 func CalculateSign(
@@ -14,7 +12,8 @@ func CalculateSign(
 	params map[string]string,
 	version int) string {
 	hasher := getHasher(version)
-	stringToHash := getStringToHash(key, params)
+	stringToHash := getStringToHash(version, params)
+	stringToHash += key
 
 	hasher.Write([]byte(stringToHash))
 	return hex.EncodeToString(hasher.Sum(nil))
@@ -35,13 +34,19 @@ func getHasher(version int) hash.Hash {
 	return hasher
 }
 
-func getStringToHash(key string, params map[string]string) string {
-	params = SortParameters(params)
-	output := []string{}
+func getStringToHash(version int, params map[string]string) string {
+	switch version {
+	case 1:
+		if uid, ok := params["uid"]; ok {
+			return uid
+		}
 
-	for k, v := range params {
-		output = append(output, fmt.Sprintf("%s=%s", k, v))
+		return ""
+
+	case 2, 3:
+		params = SortParameters(params)
+		return MapToQueryString(params)
 	}
 
-	return strings.Join(output, "&")
+	return ""
 }

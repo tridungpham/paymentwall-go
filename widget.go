@@ -86,14 +86,14 @@ func (w *widget) BuildQuery() string {
 
 	switch w.cfg.GetAPIType() {
 	case APIDigitalGoods:
-		params = mergeMaps(
+		params = MergeMaps(
 			params,
 			prepareDigitalGoodsParameters(w.Products),
 		)
 		break
 
 	case APICart:
-		params = mergeMaps(
+		params = MergeMaps(
 			params,
 			prepareCartParameters(w.Products),
 		)
@@ -106,7 +106,7 @@ func (w *widget) BuildQuery() string {
 		w.cfg.GetSignatureVersion(),
 	)
 
-	return mapToQueryString(params)
+	return MapToQueryString(params)
 }
 
 func defaultWidgetAttributes() WidgetAttributes {
